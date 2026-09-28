@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>茶 · Gongfu Tea Catalog</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <span class="brand-mark">茶</span>
+      <div>
+        <h1>Gongfu Tea Catalog</h1>
+        <p class="tagline">MY TEAS, BREWED RIGHT.</p>
+      </div>
+    </div>
+    <div class="topbar-actions">
+      <div class="overflow-menu">
+        <button id="addBtn" class="btn btn-primary">+ Add Tea ▾</button>
+        <div id="addDropdown" class="dropdown" hidden>
+          <button class="dropdown-item" id="addManualBtn">Manual</button>
+          <button class="dropdown-item" id="promptBtn">AI — Generate &amp; Import</button>
+          <button class="dropdown-item" id="exportBtn">Export backup</button>
+        </div>
+      </div>
+      <button id="selectBtn" class="btn btn-ghost">Select</button>
+    </div>
+  </header>
+
+  <section class="controls">
+    <input type="search" id="searchInput" class="search" placeholder="Search by name, origin, vendor…" />
+    <select id="typeFilter" class="select">
+      <option value="">All types</option>
+    </select>
+    <select id="sortSelect" class="select">
+      <option value="name">A – Z</option>
+      <option value="qty">Quantity ↑</option>
+      <option value="recent">Last enjoyed</option>
+    </select>
+    <span id="countLabel" class="count-label"></span>
+  </section>
+
+  <div id="selectionBar" class="selection-bar" hidden>
+    <label class="sel-all"><input type="checkbox" id="selectAll" /> Select all</label>
+    <span id="selCount" class="count-label">0 selected</span>
+    <span class="spacer"></span>
+    <button id="deleteSelectedBtn" class="btn btn-danger btn-small" disabled>Delete selected</button>
+    <button id="cancelSelectBtn" class="btn btn-ghost btn-small">Done</button>
+  </div>
+
+  <main id="grid" class="grid"></main>
+
+  <p id="emptyState" class="empty-state" hidden>
+    No teas yet. Click <strong>+ Add Tea</strong> to start your catalog.
+  </p>
+
+  <!-- Tea card modal -->
+  <div id="cardOverlay" class="overlay" hidden>
+    <div class="card-modal" role="dialog" aria-modal="true">
+      <button class="close-x" data-close-card aria-label="Close">×</button>
+      <div id="cardRender" class="card-render"></div>
+      <div class="card-modal-actions">
+        <button type="button" class="btn btn-ghost" data-close-card>Close</button>
+        <button type="button" id="printCardBtn" class="btn btn-primary">Print / Save PDF</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- AI: generate prompt + paste reply in one flow -->
+  <div id="aiOverlay" class="overlay" hidden>
+    <div class="modal ai-modal" role="dialog" aria-modal="true">
+      <button class="close-x" data-close-ai aria-label="Close">×</button>
+      <h2>Generate teas with AI</h2>
+
+      <div class="ai-step">
+        <div class="ai-step-label">1 · Copy this prompt and paste it into Claude or any AI</div>
+        <textarea id="promptText" class="prompt-box" readonly rows="8"></textarea>
+        <div class="ai-step-actions">
+          <button type="button" id="copyPromptBtn" class="btn btn-primary btn-small">Copy prompt</button>
+        </div>
+      </div>
+
+      <div class="ai-divider">then list your teas, get a reply, and paste it below</div>
+
+      <div class="ai-step">
+        <div class="ai-step-label">2 · Paste the AI's reply here (code fences are stripped automatically)</div>
+        <textarea id="pasteInput" class="prompt-box" rows="8" placeholder="Paste the full AI reply here…"></textarea>
+        <div class="ai-step-actions">
+          <button type="button" class="btn btn-ghost btn-small" data-close-ai>Cancel</button>
+          <button type="button" id="pasteImportBtn" class="btn btn-primary btn-small">Import teas</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Enjoy modal -->
+  <div id="enjoyOverlay" class="overlay" hidden>
+    <div class="modal enjoy-modal" role="dialog" aria-modal="true">
+      <button class="close-x" data-close-enjoy aria-label="Close">×</button>
+      <div id="enjoyBody"></div>
+    </div>
+  </div>
+
+  <!-- Detail drawer -->
+  <div id="detailOverlay" class="overlay" hidden>
+    <div class="detail-panel" role="dialog" aria-modal="true">
+      <button class="close-x" data-close-detail aria-label="Close">×</button>
+      <div id="detailBody"></div>
+    </div>
+  </div>
+
+  <!-- Add / Edit modal -->
+  <div id="formOverlay" class="overlay" hidden>
+    <div class="modal" role="dialog" aria-modal="true">
+      <button class="close-x" data-close-form aria-label="Close">×</button>
+      <h2 id="formTitle">Add Tea</h2>
+      <form id="teaForm" autocomplete="off">
+        <input type="hidden" id="teaId" />
+
+        <fieldset>
+          <legend>Identity</legend>
+          <div class="field-row">
+            <label class="field">
+              <span>Name *</span>
+              <input type="text" id="f-name" required placeholder="e.g. Yangchun Snow Jasmine" />
+            </label>
+            <label class="field">
+              <span>Chinese name (汉字)</span>
+              <input type="text" id="f-nameZh" placeholder="阳春白雪茉莉花茶" />
+            </label>
+          </div>
+          <div class="field-row">
+            <label class="field">
+              <span>Tasting keywords (comma-separated, for card)</span>
+              <input type="text" id="f-keywords" placeholder="Floral, Bright, Sweet, Crisp" />
+            </label>
+            <label class="field">
+              <span>Type</span>
+              <select id="f-type">
+                <option value="Green">Green</option>
+                <option value="White">White</option>
+                <option value="Yellow">Yellow</option>
+                <option value="Oolong" selected>Oolong</option>
+                <option value="Black">Black</option>
+                <option value="Sheng Puerh">Sheng Puerh</option>
+                <option value="Shou Puerh">Shou Puerh</option>
+                <option value="Dark/Hei">Dark / Hei</option>
+                <option value="Herbal">Herbal</option>
+                <option value="Other">Other</option>
+              </select>
+            </label>
+          </div>
+        </fieldset>
+
+        <fieldset>
+          <legend>Inventory &amp; Origin</legend>
+          <div class="field-row">
+            <label class="field">
+              <span>Origin / Region</span>
+              <input type="text" id="f-origin" placeholder="e.g. Wuyi Mountains, Fujian" />
+            </label>
+            <label class="field">
+              <span>Vendor</span>
+              <input type="text" id="f-vendor" placeholder="e.g. Yunnan Sourcing" />
+            </label>
+          </div>
+          <div class="field-row">
+            <label class="field">
+              <span>Season</span>
+              <select id="f-season">
+                <option value="">—</option>
+                <option value="Spring">Spring</option>
+                <option value="Summer">Summer</option>
+                <option value="Autumn">Autumn</option>
+                <option value="Winter">Winter</option>
+              </select>
+            </label>
+            <label class="field">
+              <span>Year</span>
+              <input type="number" id="f-year" placeholder="2023" min="0" />
+            </label>
+            <label class="field">
+              <span>Quantity remaining (g)</span>
+              <input type="number" id="f-qty" placeholder="50" min="0" step="0.1" />
+            </label>
+          </div>
+        </fieldset>
+
+        <fieldset>
+          <legend>Gongfu Brewing</legend>
+          <div class="field-row">
+            <label class="field">
+              <span>Water temp (°C)</span>
+              <input type="number" id="f-temp" placeholder="80" min="0" max="100" />
+            </label>
+            <label class="field">
+              <span>…to (°C, optional range)</span>
+              <input type="number" id="f-tempMax" placeholder="90" min="0" max="100" />
+            </label>
+            <label class="field">
+              <span>Leaf (g)</span>
+              <input type="number" id="f-leaf" placeholder="7" min="0" step="0.1" />
+            </label>
+            <label class="field">
+              <span>Vessel (ml)</span>
+              <input type="number" id="f-vessel" placeholder="120" min="1" />
+            </label>
+          </div>
+          <label class="field checkbox-field">
+            <input type="checkbox" id="f-rinse" />
+            <span>Rinse leaves before first steep</span>
+          </label>
+
+          <div class="steeps-editor">
+            <div class="steeps-head">
+              <span>Steep schedule (seconds)</span>
+              <button type="button" id="addSteepBtn" class="btn btn-small">+ Steep</button>
+            </div>
+            <div id="steepsList" class="steeps-list"></div>
+            <p class="hint">Each entry is one infusion. Times typically climb (e.g. 10, 15, 20, 30…).</p>
+          </div>
+        </fieldset>
+
+        <fieldset>
+          <legend>Notes</legend>
+          <label class="field">
+            <span>Tasting notes</span>
+            <textarea id="f-notes" rows="3" placeholder="Roasted, mineral, stone fruit, long sweet finish…"></textarea>
+          </label>
+          <label class="field">
+            <span>Steeping instructions (for card)</span>
+            <textarea id="f-steepInstr" rows="3" placeholder="Pour 5-7g into gaiwan. Use cooler water for sweeter tea…"></textarea>
+          </label>
+          <label class="field">
+            <span>Food pairings</span>
+            <textarea id="f-food" rows="2" placeholder="Dark chocolate, roasted nuts, dim sum…"></textarea>
+          </label>
+        </fieldset>
+
+        <fieldset>
+          <legend>Leaf photo (for card, optional)</legend>
+          <div class="photo-field">
+            <div id="photoPreview" class="photo-preview" aria-hidden="true"></div>
+            <input type="file" id="f-photo" accept="image/*" />
+            <button type="button" id="clearPhotoBtn" class="btn btn-small" hidden>Remove</button>
+          </div>
+        </fieldset>
+
+        <div class="form-actions">
+          <button type="button" id="deleteBtn" class="btn btn-danger" hidden>Delete</button>
+          <span class="spacer"></span>
+          <button type="button" class="btn btn-ghost" data-close-form>Cancel</button>
+          <button type="submit" class="btn btn-primary">Save</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div id="savedindicator" class="saved-indicator">Saved ✓</div>
+  <script src="app.js"></script>
+</body>
+</html>
